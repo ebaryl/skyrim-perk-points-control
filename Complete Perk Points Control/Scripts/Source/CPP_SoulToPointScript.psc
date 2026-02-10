@@ -13,7 +13,6 @@ VisualEffect Property MS04MemoryFXBody01VFX Auto
 
 Event OnEffectStart(Actor akTarget, Actor akCaster)
     Actor Player = Game.GetPlayer()
-    ; int soulsCollected = Game.QueryStat("Dragon Souls Collected")
     int soulsCollected = Player.GetActorValue("DragonSouls") as int
     int soulsNeeded = CPP_Spell_SoulToPoint_SoulsNeeded.GetValueInt()
     int perkPointsGain = CPP_Spell_SoulToPoint_Points.GetValueInt()
@@ -30,14 +29,13 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
         FXDragonDeathRHandBitsEffect.Play(akTarget, 5)
         ObjectReference fx = Game.GetPlayer().PlaceAtMe(ExplosionShoutArea01)
 
-        ; Game.SetMiscStat("Dragon Souls Collected", soulsCollected - soulsNeeded)
         Player.ModActorValue("DragonSouls", -soulsNeeded)
         Game.AddPerkPoints(perkPointsGain)
 
         if perkPointsGain > 1
-            Debug.Notification("You've gained " + perkPointsGain + " perk points.")
+            Debug.Notification("You've gained " + perkPointsGain + " perk points!")
         else
-            Debug.Notification("You've gained a perk point.")
+            Debug.Notification("You've gained a perk point!")
         endif
 
     elseif buttonIndex == 0 && soulsCollected < soulsNeeded
@@ -47,13 +45,4 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
     else
         MS04MemoryFXBody01VFX.Stop(akTarget)
     endif
-
-    ; VisualEffect3.Play(akTarget, 5)
-    ; ObjectReference fxRef = akTarget.PlaceAtMe(ShoutSelfAreaEffect)
-    ; fxRef.SetAngle(90.0, 0.0, 0.0) ; pitch upward
-
-    ; MAGBaneOfTheUndead.Apply()
-    ;ObjectReference fx = Game.GetPlayer().PlaceAtMe(ExplosionTurnUndeadMass01, 1, true, true)
-    ; ObjectReference fx = Game.GetPlayer().PlaceAtMe(ExplosionTurnUndeadMass01)
-
 EndEvent

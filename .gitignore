@@ -1,4 +1,14 @@
-/Complete Perk Points Control/.vscode
-Complete Perk Points Control/SkyrimSE.code-workspace
-Complete Perk Points Control/skyrimse.ppj
+# Editor / IDE
+/Complete Perk Points Control/.vscode/
+*.code-workspace
+*.ppj
+
+# Skyrim compiled scripts
 /Complete Perk Points Control/Scripts/*.pex
+
+# Local / generated files
+*.dll
+*.txt
+
+# Specific source files (local-only)
+/Complete Perk Points Control/Scripts/CPP_PlayerLevelTrackerScript.psc

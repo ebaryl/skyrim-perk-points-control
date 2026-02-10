@@ -10,9 +10,20 @@ GlobalVariable Property CPP_MaxSkillLevel auto
 GlobalVariable Property CPP_ShowNotifications auto
 GlobalVariable Property CPP_GlobalSkillMode_Enabled auto
 GlobalVariable Property CPP_GlobalSkillMode_PerkPointsEarned auto
+GlobalVariable Property CPP_GlobalSkillMode_LevelProgress auto
+GlobalVariable[] Property CPP_LastSkillLevel auto
 GlobalVariable Property CPP_PlayerLevelMode_Enabled auto
 GlobalVariable Property CPP_PlayerLevelMode_PerkPointsEarned auto
 GlobalVariable Property CPP_PerkPointsMultiplier auto
+GlobalVariable Property CPP_LegendarySkillsEnabled auto
+GlobalVariable[] Property CPP_SkillLegendaryCount auto
+GlobalVariable Property CPP_CustomSkills_MCMEnabled auto
+GlobalVariable Property CPP_CustomSkills_Enabled auto
+GlobalVariable Property CPP_CustomSkills_GlobalProgressionMode auto
+GlobalVariable Property CPP_CustomSkills_StartingLevel auto
+GlobalVariable Property CPP_CustomSkills_LevelInterval auto
+GlobalVariable Property CPP_CustomSkills_MaxLevel auto
+GlobalVariable Property CPP_CustomSkills_PerkPointsMultiplier auto
 GlobalVariable Property CPP_Spell_SoulToPoint_SoulsNeeded auto
 GlobalVariable Property CPP_Spell_SoulToPoint_Points auto
 GlobalVariable Property CPP_DragonDeaths_Enabled auto
@@ -20,9 +31,12 @@ GlobalVariable Property CPP_DragonDeaths_SoulsNeeded auto
 GlobalVariable Property CPP_DragonDeaths_Points auto
 GlobalVariable Property CPP_Menu_HasSelectedProgression auto
 GlobalVariable Property CPP_Menu_HasDetectedLegendary auto
-Message Property CPP_MessageBox_Confirm auto
+; GlobalVariable Property CPP_LegendaryPowerBonusEnabled auto
+; GlobalVariable Property CPP_LegendaryPowerBonusValue auto
+; Message Property CPP_MessageBox_Confirm auto
 
-int totalPointsToAdd = 0
+; int totalPointsToAdd = 0
+int totalMissing = 0
 bool debugCheaterToggle = false
 float debugCheaterPerkPoints = 1.0
 string[] menuOptions
@@ -35,11 +49,18 @@ int OID_ModEnabled
 int OID_GlobalSkillProgressionMode
 int OID_PlayerLevelProgressionMode
 int OID_ProgressionMode
+int OID_LegendarySkillsEnabled
 int OID_StartingLevel
 int OID_LevelInterval  
 int OID_MaxSkillLevel
 int OID_ShowNotifications
-int OID_AddMissedPoints
+int OID_CustomSkills_Enabled
+int OID_CustomSkills_GlobalProgressionMode
+int OID_CustomSkills_StartingLevel
+int OID_CustomSkills_LevelInterval
+int OID_CustomSkills_MaxLevel
+int OID_CustomSkills_PerkPointsMultiplier
+int OID_AddMissingPoints
 int OID_UndoAddedMissedPoints
 int[] OID_SkillsDisabled
 int OID_CheaterToggle
@@ -56,16 +77,20 @@ int OID_DetectLegendary
 int OID_PerkPointsLevelsPreview
 int OID_PerkPointsPreview  
 int OID_PerkPointsExcess
+int[] OID_LegendarySkills
+int OID_LegendaryPowerBonusEnabled
+int OID_LegendaryPowerBonusValue
 
 
 
 Event OnConfigInit()
     ModName = "Complete Perk Points Control"
-    Pages = new string[3]
+    Pages = new string[4]
     Pages[0] = "General"
     Pages[1] = "Skill Toggles"
-    ; Pages[1] = "Skill Overview"
-    Pages[2] = "Debug"
+    Pages[2] = "Custom Skills"
+    ; Pages[2] = "Legendary Bonuses"
+    Pages[3] = "Debug"
 EndEvent
 
 Event OnPageReset(string page)
@@ -81,20 +106,19 @@ Event OnPageReset(string page)
         
         AddHeaderOption("General Settings")
         OID_ModEnabled = AddToggleOption("Enable Mod", CPP_ModEnabled.GetValue())
+        OID_LegendarySkillsEnabled = AddToggleOption("Enable Legendary Perk Points", CPP_LegendarySkillsEnabled.GetValue())
         OID_ShowNotifications = AddToggleOption("Show Notifications", CPP_ShowNotifications.GetValue())
         AddEmptyOption()
 
         AddHeaderOption("Progression Mode")
-        ;OID_GlobalSkillProgressionMode = AddToggleOption("Use Global Skill Counter", CPP_GlobalSkillMode_Enabled.GetValue())
-        OID_ProgressionMode = AddMenuOption("", GetProgressionMode())
-        ;OID_PlayerLevelProgressionMode = AddToggleOption("Use Player Level Counter", CPP_GlobalSkillMode_Enabled.GetValue())
+        OID_ProgressionMode = AddMenuOption("", GetProgressionMode(), CPP_Menu_HasSelectedProgression.GetValueInt())
         AddEmptyOption()
         
         AddHeaderOption("Points Award Settings")
         OID_StartingLevel = AddSliderOption("Starting Level", CPP_StartingLevel.GetValue(), "{0}")
         OID_LevelInterval = AddSliderOption("Level Interval", CPP_LevelInterval.GetValue(), "{0}")
         OID_MaxSkillLevel = AddSliderOption("Max Skill Level", CPP_MaxSkillLevel.GetValue(), "{0}")
-        OID_PointsMultiplier = AddSliderOption("Points Multiplier", CPP_PerkPointsMultiplier.GetValueInt(), "{0}")
+        OID_PointsMultiplier = AddSliderOption("Perk Points Multiplier", CPP_PerkPointsMultiplier.GetValueInt(), "{0}")
         AddEmptyOption()
 
         AddHeaderOption("Spell Settings")
@@ -103,7 +127,7 @@ Event OnPageReset(string page)
         AddEmptyOption()
 
         AddHeaderOption("Dragon Soul Absorbtion Points")
-        OID_DragonEnabled = AddToggleOption("Enable", CPP_DragonDeaths_Enabled.GetValue())
+        OID_DragonEnabled = AddToggleOption("Enable Absorbtion Points", CPP_DragonDeaths_Enabled.GetValue())
         OID_DragonSouls = AddSliderOption("Soul Absorbtions Required", CPP_DragonDeaths_SoulsNeeded.GetValue(), "{0}")
         OID_DragonPoints = AddSliderOption("Perk Points Gained", CPP_DragonDeaths_Points.GetValue(), "{0}")
         AddEmptyOption()
@@ -111,89 +135,88 @@ Event OnPageReset(string page)
         SetCursorPosition(1) ; Move to right column
         
         AddHeaderOption("Initial Points Setup")
-        OID_AddMissedPoints = AddTextOption("Add Missing Points", "Click to Add")
+        OID_AddMissingPoints = AddTextOption("Add Missing Points", "Click to Add")
         OID_UndoAddedMissedPoints = AddTextOption("Undo Points", "Click to Undo")
         AddEmptyOption()
-
-        ;AddHeaderOption("Display Settings")
-        ;OID_ShowNotifications = AddToggleOption("Show Notifications", CPP_ShowNotifications.GetValue())
-        ;AddEmptyOption()
+        AddEmptyOption()
         
         AddHeaderOption("Current Settings Preview")
         OID_PerkPointsLevelsPreview = AddTextOption("Points Awards At:", GetPerkLevelsPreview())
         OID_PerkPointsPreview = AddTextOption("Perk Points Per Skill:", GetPerkPointsPreview())
         OID_PerkPointsExcess = AddTextOption("Excess Perk Points:", ExcessPointsCalculate())
 
-        ; // DISABLE SETTINGS
-        ; int CPP_MCM_UsedDetectLegendary
-        
-        
-
     elseif page == "Skill Toggles"
         SetCursorFillMode(TOP_TO_BOTTOM)
         
         OID_SkillsDisabled = new int[18]
 
+        AddEmptyOption()
         AddHeaderOption("Select To Disable")
         AddEmptyOption()
-        OID_SkillsDisabled[0] = AddToggleOption("Alteration", CPP_SkillsDisabled[0].GetValue())
-        OID_SkillsDisabled[1] = AddToggleOption("Conjuration", CPP_SkillsDisabled[1].GetValue())
-        OID_SkillsDisabled[2] = AddToggleOption("Destruction", CPP_SkillsDisabled[2].GetValue())
-        OID_SkillsDisabled[3] = AddToggleOption("Illusion", CPP_SkillsDisabled[3].GetValue())
-        OID_SkillsDisabled[4] = AddToggleOption("Restoration", CPP_SkillsDisabled[4].GetValue())
-        OID_SkillsDisabled[5] = AddToggleOption("Enchanting", CPP_SkillsDisabled[5].GetValue())
-        OID_SkillsDisabled[6] = AddToggleOption("One-Handed", CPP_SkillsDisabled[6].GetValue())
-        OID_SkillsDisabled[7] = AddToggleOption("Two-Handed", CPP_SkillsDisabled[7].GetValue())
+
+        int i = 0
+        while i < 8
+            OID_SkillsDisabled[i] = AddToggleOption(CPP_SkillNames[i], CPP_SkillsDisabled[i].GetValue())
+            i += 1
+        EndWhile
 
         SetCursorPosition(1)
-        OID_SkillsDisabled[8] = AddToggleOption("Marksman", CPP_SkillsDisabled[8].GetValue())
-        OID_SkillsDisabled[9] = AddToggleOption("Block", CPP_SkillsDisabled[9].GetValue())
-        OID_SkillsDisabled[10] = AddToggleOption("Light Armor", CPP_SkillsDisabled[10].GetValue())
-        OID_SkillsDisabled[11] = AddToggleOption("Heavy Armor", CPP_SkillsDisabled[11].GetValue())
-        OID_SkillsDisabled[12] = AddToggleOption("Smithing", CPP_SkillsDisabled[12].GetValue())
-        OID_SkillsDisabled[13] = AddToggleOption("Alchemy", CPP_SkillsDisabled[13].GetValue())
-        OID_SkillsDisabled[14] = AddToggleOption("Sneak", CPP_SkillsDisabled[14].GetValue())
-        OID_SkillsDisabled[15] = AddToggleOption("Lockpicking", CPP_SkillsDisabled[15].GetValue())
-        OID_SkillsDisabled[16] = AddToggleOption("Pickpocket", CPP_SkillsDisabled[16].GetValue())
-        OID_SkillsDisabled[17] = AddToggleOption("Speechcraft", CPP_SkillsDisabled[17].GetValue())
+        AddEmptyOption()
+        while i < 18
+            OID_SkillsDisabled[i] = AddToggleOption(CPP_SkillNames[i], CPP_SkillsDisabled[i].GetValue())
+            i += 1
+        EndWhile
 
+    elseif page =="Custom Skills"
+        bool pluginActive = (CPP_CustomSkills_MCMEnabled.GetValueInt() == 1)
+        int flags = OPTION_FLAG_NONE
+        
+        SetCursorFillMode(TOP_TO_BOTTOM)
 
+        AddEmptyOption()
+        if (pluginActive)
+            AddHeaderOption("Custom Skills")
+        else
+            AddHeaderOption("SKSE plugin not loaded")
+            flags = OPTION_FLAG_DISABLED
+        endif
+        AddEmptyOption()
 
+        OID_CustomSkills_Enabled = AddToggleOption("Enable Custom Skill Points", CPP_CustomSkills_Enabled.GetValueInt(), flags)
+        OID_CustomSkills_GlobalProgressionMode = AddToggleOption("Cumulative Skill Progression", CPP_CustomSkills_GlobalProgressionMode.GetValueInt(), flags)
+        OID_CustomSkills_StartingLevel = AddSliderOption("Starting Level", CPP_CustomSkills_StartingLevel.GetValueInt(), "{0}", flags)
+        OID_CustomSkills_LevelInterval = AddSliderOption("Level Interval", CPP_CustomSkills_LevelInterval.GetValueInt(), "{0}", flags)
+        OID_CustomSkills_MaxLevel = AddSliderOption("Max Skill Level", CPP_CustomSkills_MaxLevel.GetValueInt(), "{0}", flags)
+        OID_CustomSkills_PerkPointsMultiplier = AddSliderOption("Perk Points Multiplier", CPP_CustomSkills_PerkPointsMultiplier.GetValueInt(), "{0}", flags)
+        
+    ; elseif page == "Legendary Bonuses"
+    ;     SetCursorFillMode(TOP_TO_BOTTOM)
 
+    ;     OID_LegendarySkills = new int[18]
 
-    ; elseif page == "Skill Overview"
-    ;     SetCursorFillMode(LEFT_TO_RIGHT)
-
-    ;     AddHeaderOption("Perk Points From Skills")
-    ;     AddTextOption("Alteration", CPP_PerkPointsEarned[0].GetValueInt())
+    ;     ; AddHeaderOption("Select To Disable")
+    ;     OID_LegendaryPowerBonusEnabled = AddToggleOption("Enable Legendary Skill Bonus", CPP_LegendaryPowerBonusEnabled.GetValue())
+    ;     OID_LegendaryPowerBonusValue = AddSliderOption("Bonus Per Legendary", CPP_LegendaryPowerBonusValue.GetValue(), "{0}")
     ;     AddEmptyOption()
 
-    ;     AddTextOption("Conjuration", CPP_PerkPointsEarned[1].GetValueInt())
-    ;     AddTextOption("Destruction", CPP_PerkPointsEarned[2].GetValueInt())
-    ;     AddTextOption("Illusion", CPP_PerkPointsEarned[3].GetValueInt())
-    ;     AddTextOption("Restoration", CPP_PerkPointsEarned[4].GetValueInt())
-    ;     AddTextOption("Enchanting", CPP_PerkPointsEarned[5].GetValueInt())
-    ;     AddTextOption("One-Handed", CPP_PerkPointsEarned[6].GetValueInt())
-    ;     AddTextOption("Two-Handed", CPP_PerkPointsEarned[7].GetValueInt())
-    ;     AddTextOption("Marksman", CPP_PerkPointsEarned[8].GetValueInt())
-    ;     AddTextOption("Block", CPP_PerkPointsEarned[9].GetValueInt())
-    ;     AddTextOption("Light Armor", CPP_PerkPointsEarned[10].GetValueInt())
-    ;     AddTextOption("Heavy Armor", CPP_PerkPointsEarned[11].GetValueInt())
-    ;     AddTextOption("Smithing", CPP_PerkPointsEarned[12].GetValueInt())
-    ;     AddTextOption("Alchemy", CPP_PerkPointsEarned[13].GetValueInt())
-    ;     AddTextOption("Sneak", CPP_PerkPointsEarned[14].GetValueInt())
-    ;     AddTextOption("Lockpicking", CPP_PerkPointsEarned[15].GetValueInt())
-    ;     AddTextOption("Pickpocket", CPP_PerkPointsEarned[16].GetValueInt())
-    ;     AddTextOption("Speechcraft", CPP_PerkPointsEarned[17].GetValueInt())
+    ;     int i = 0
+    ;     while i < 8
+    ;         AddTextOption(CPP_SkillNames[i], GetLegendaryBonusText(i))
+    ;         i += 1
+    ;     EndWhile
 
+    ;     SetCursorPosition(1)
+    ;     AddEmptyOption()
+    ;     while i < 18
+    ;         AddTextOption(CPP_SkillNames[i], GetLegendaryBonusText(i))
+    ;         i += 1
+    ;     EndWhile
 
-
-
-    ElseIf page == "Debug"
+    elseif page == "Debug"
         SetCursorFillMode(TOP_TO_BOTTOM)
 
         AddHeaderOption("Legendary Skills")
-        OID_DetectLegendary = AddTextOption("Detect Legendary Skills", "Detect")
+        OID_DetectLegendary = AddTextOption("Detect Legendary Skills", "Detect", CPP_Menu_HasDetectedLegendary.GetValueInt())
 
         AddEmptyOption()        
         AddHeaderOption("Cheats")
@@ -205,26 +228,22 @@ Event OnPageReset(string page)
             OID_CheaterAdd = AddTextOption("Add Points", "Click to Add")
             OID_CheaterRemove = AddTextOption("Remove Points", "Click to Remove")
         endif
-
-        ; // DISABLE
-
-        if CPP_Menu_HasDetectedLegendary.GetValue()
-            SetOptionFlags(OID_DetectLegendary, OPTION_FLAG_DISABLED, true)
-        endif
-    EndIf
+    endif
 EndEvent
 
 Event OnOptionHighlight(int option)
     if (option == OID_ShowNotifications)
-        SetInfoText("Toggle notifications when perk points are awarded (e.g., from leveling up, skill progress, or dragon souls).")
+        SetInfoText("Toggle notifications when perk points are awarded (e.g., from leveling up, skill progress, or dragon souls). Notifications are disabled for Player Level Progression and Custom Skills.")
     
     elseif option == OID_ProgressionMode
         string aa = "PERMANENT CHOICE. "
         string a = "Independent Skill Progression: Grants a perk point when any single skill increases by the set amount. "
         string b = "Cumulative Skill Progression: Grants a perk point when the total combined skill level increases by the set amount. "
-        string c = "Player Level Beta: Grants a perk point each time your character levels up by the set amount after you close level-up menu."
+        string c = "Player Level: Grants a perk point each time your character levels up by the set amount AFTER you select stats and close level-up menu."
         SetInfoText(aa + a + b + c)
 
+    elseif option == OID_LegendarySkillsEnabled
+        SetInfoText("Controls whether legendary skills can still grant perk points.")
     elseif (option == OID_StartingLevel)
         SetInfoText("The player level or skill level at which you start receiving perk points. Includes this level.")
     elseif (option == OID_LevelInterval)
@@ -238,70 +257,75 @@ Event OnOptionHighlight(int option)
     elseif option == OID_SpellPoints
         SetInfoText("Sets how many perk points are gained when the required number of dragon souls is consumed by the spell.")
     elseif option == OID_DragonEnabled
-        SetInfoText("Enable or disable automatic perk point rewards based on dragon soul absorption (from dragon kills).")
+        SetInfoText("Enable or disable automatic perk point rewards based on dragon soul absorption.")
     elseif option == OID_DragonSouls
         SetInfoText("Sets how many dragon souls must be absorbed to earn perk points passively. Souls are not consumed. Example: 30 = 1 point every 30 dragon souls.")
     elseif option == OID_DragonPoints
         SetInfoText("Sets how many perk points are awarded each time the required number of dragon souls is absorbed.")
     elseif option == OID_DetectLegendary
         SetInfoText("For independent skill progression only. Detects maxed-out skills based on your max level setting.")
-    elseif option == OID_AddMissedPoints
+    elseif option == OID_AddMissingPoints
         SetInfoText("Adds any missed perk points due to changed settings (e.g., lowering starting level, reducing the level interval, or increasing the points multiplier).")
-        ; SetInfoText("Adds missed perk points if you installed the mod mid-save or changed the settings.")
     elseif option == OID_UndoAddedMissedPoints
         SetInfoText("Removes previously added points if you changed your mind afterward.")
-        ;SetInfoText("Undo the last addition of missed perk points.")
     elseif option == OID_PerkPointsLevelsPreview
         SetInfoText("Shows a preview of the first few levels and when you'll receive perk points. Useful for planning.")
     elseif option == OID_PerkPointsPreview
         SetInfoText("Displays how many perk points you'll earn for a single skill if you level it to the maximum skill level.")
     elseif option == OID_PerkPointsExcess
         SetInfoText("Shows how many perk points are temporarily withheld due to reduced settings (e.g., higher level interval or lower multiplier). These points will be balanced out over future levels.")
+    elseif option == OID_CustomSkills_Enabled
+        SetInfoText("Enables or disables the Custom Skills perk point progression system.")
+    elseif option == OID_CustomSkills_GlobalProgressionMode
+        SetInfoText("When enabled, perk point progression is shared globally across all custom skills instead of being tracked individually per skill.")
+    elseif option == OID_CustomSkills_StartingLevel
+        SetInfoText("The skill level at which a custom skill begins granting perk points. Includes this level.")
+    elseif option == OID_CustomSkills_LevelInterval
+        SetInfoText("Number of skill levels required before another perk point is granted. Example: 5 = 1 point every 5 skill levels.")
+    elseif option == OID_CustomSkills_MaxLevel
+        SetInfoText("The maximum skill level used for perk point calculation. Should match the custom skill cap.")
+    elseif option == OID_CustomSkills_PerkPointsMultiplier
+        SetInfoText("Multiplies the number of perk points awarded at each interval. Example: 2 grants double perk points.")
+
     endif
 EndEvent
 
-string Function checkFlag(string OID_option)
-    if OID_option == "OID_ProgressionMode"
-        if CPP_Menu_HasSelectedProgression.GetValue()
-            return "OPTION_FLAG_DISABLED"
-    elseif OID_option == "OID_DetectLegendary"
-        if CPP_Menu_HasDetectedLegendary.GetValue()
-            return "OPTION_FLAG_DISABLED"
-    endif
-EndFunction
-
 Event OnOptionMenuOpen(int option)
     if option == OID_ProgressionMode
+        if CPP_Menu_HasSelectedProgression.GetValue() == 1
+            return
+        endif
         menuOptions = new string[3]
-        menuOptions[0] = "Independent Skill Progression" ; single skill treshold
+        menuOptions[0] = "Independent Skill Progression"
         menuOptions[1] = "Cumulative Skill Progression"
-        menuOptions[2] = "Player Level Beta"
+        menuOptions[2] = "Player Level"
         SetMenuDialogOptions(menuOptions)
     endif
 EndEvent
 
 Event OnOptionMenuAccept(int option, int index)
     if option == OID_ProgressionMode
-        if index >= 0
-            CPP_Menu_HasSelectedProgression.SetValue(1)
-            SetOptionFlags(OID_ProgressionMode, OPTION_FLAG_DISABLED, true)
+        if CPP_Menu_HasSelectedProgression.GetValue() == 1
+            return
         endif
 
-        if index == 0 ;normal skill progression mode - needs to be for example 5 levels of marksman or 5 levels of block
+        if index >= 0
+            CPP_Menu_HasSelectedProgression.SetValue(1)
+            SetOptionFlags(OID_ProgressionMode, OPTION_FLAG_DISABLED)
+        endif
+
+        if index == 0 ;normal skill progression mode
                 CPP_GlobalSkillMode_Enabled.SetValue(0)
                 CPP_PlayerLevelMode_Enabled.SetValue(0)
-                ; Debug.MessageBox("You will now gain additional perk points based on your progress in a single skill.")
 
-        elseif index == 1 ;global skill level progression - doesnt matter if you level 3 of alchemy and 2 of marksman, it still counts as 5 levels
+        elseif index == 1 ;global skill level progression
                 CPP_GlobalSkillMode_Enabled.SetValue(1)
                 CPP_PlayerLevelMode_Enabled.SetValue(0)
-                ; Debug.MessageBox("You will now gain additional perk points based on the total progress across all skills.")
+                ResetLastSkillLevels()
 
-        elseif index == 2 ; player level progresion - based on player level not skill levels, you gain additional perk points on player level ups
+        elseif index == 2 ; player level progresion
                 CPP_GlobalSkillMode_Enabled.SetValue(0)
                 CPP_PlayerLevelMode_Enabled.SetValue(1)
-                ; Debug.MessageBox("You'll gain additional perk points when your character level increases AFTER you close the stats menu")
-                Debug.MessageBox("Extra perk points are awarded after you level up, select stats and close the menu.")
 
         endif
 
@@ -310,18 +334,33 @@ Event OnOptionMenuAccept(int option, int index)
     endif
 EndEvent
 
+; string Function GetLegendaryBonusText(int skillIndex)
+;     int legendaryCount = CPP_SkillLegendaryCount[skillIndex].GetValueInt()
+;     int bonus = CPP_LegendaryPowerBonusValue.GetValueInt()
+
+;     Return legendaryCount * bonus + "%"
+; EndFunction
+
+
+Function ResetLastSkillLevels()
+    Actor playerRef = Game.GetPlayer()
+    int i = 0
+    while i < CPP_LastSkillLevel.Length
+        CPP_LastSkillLevel[i].SetValueInt(playerRef.GetBaseActorValue(CPP_SkillNames[i]) as int)
+        i += 1
+    endwhile
+EndFunction
 
 string Function GetProgressionMode()
-    if CPP_GlobalSkillMode_Enabled.GetValue() == 1
-        CPP_PlayerLevelMode_Enabled.SetValue(0)
+    if CPP_PlayerLevelMode_Enabled.GetValue() == 1
+        return "Player Level"
+    elseif CPP_GlobalSkillMode_Enabled.GetValue() == 1
         return "Cumulative Skill Progression"
-    elseif CPP_PlayerLevelMode_Enabled.GetValue() == 1
-        CPP_GlobalSkillMode_Enabled.SetValue(0)
-        return "Player Level Beta"
     else
         return "Independent Skill Progression"
     endif
 EndFunction
+
 
 
 Event OnOptionSelect(int option)
@@ -332,19 +371,14 @@ Event OnOptionSelect(int option)
             CPP_ModEnabled.SetValue(1)
         endif
         SetToggleOptionValue(option, CPP_ModEnabled.GetValue())
-        
-    ; elseif option == OID_GlobalSkillProgressionMode
-    ;     if CPP_GlobalSkillMode_Enabled.GetValue() == 1
-    ;         CPP_GlobalSkillMode_Enabled.SetValue(0)
-    ;     else
-    ;         CPP_GlobalSkillMode_Enabled.SetValue(1)
-    ;     endif
 
-    ;     int buttonIndex = CPP_MessageBox_Confirm.Show()
-    ;     if buttonIndex == 0
-    ;         CPP_Menu_HasSelectedProgression.SetValue(1)
-    ;         SetToggleOptionValue(option, CPP_GlobalSkillMode_Enabled.GetValue())
-    ;     endif
+    elseif option == OID_LegendarySkillsEnabled
+        if CPP_LegendarySkillsEnabled.GetValue() == 1
+            CPP_LegendarySkillsEnabled.SetValue(0)
+        else
+            CPP_LegendarySkillsEnabled.SetValue(1)
+        endif
+        SetToggleOptionValue(option, CPP_LegendarySkillsEnabled.GetValue())
 
     elseif option == OID_ShowNotifications
         if CPP_ShowNotifications.GetValue() == 1
@@ -353,10 +387,9 @@ Event OnOptionSelect(int option)
             CPP_ShowNotifications.SetValue(1)
         endif
         SetToggleOptionValue(option, CPP_ShowNotifications.GetValue())
-        CPP_Menu_HasSelectedProgression.SetValue(1)
         
-    elseif option == OID_AddMissedPoints
-        AddMissedPoints()
+    elseif option == OID_AddMissingPoints
+        AddMissingPoints()
 
     elseif option == OID_UndoAddedMissedPoints
         UndoAddedMissedPoints()
@@ -368,11 +401,35 @@ Event OnOptionSelect(int option)
             CPP_DragonDeaths_Enabled.SetValue(1)
         endif
         SetToggleOptionValue(option, CPP_DragonDeaths_Enabled.GetValue())
+    
+    elseif option == OID_CustomSkills_Enabled
+        if CPP_CustomSkills_Enabled.GetValue() == 1
+            CPP_CustomSkills_Enabled.SetValue(0)
+        else
+            CPP_CustomSkills_Enabled.SetValue(1)
+        endif
+        SetToggleOptionValue(option, CPP_CustomSkills_Enabled.GetValue())
+
+    elseif option == OID_CustomSkills_GlobalProgressionMode
+        if CPP_CustomSkills_GlobalProgressionMode.GetValue() == 1
+            CPP_CustomSkills_GlobalProgressionMode.SetValue(0)
+        else
+            CPP_CustomSkills_GlobalProgressionMode.SetValue(1)
+        endif
+        SetToggleOptionValue(option, CPP_CustomSkills_GlobalProgressionMode.GetValue())
 
     elseif option == OID_DetectLegendary
         DetectLegendarySkills()
         CPP_Menu_HasDetectedLegendary.SetValue(1)
-        SetOptionFlags(OID_DetectLegendary, OPTION_FLAG_DISABLED, true)
+        SetOptionFlags(OID_DetectLegendary, OPTION_FLAG_DISABLED)
+
+    ; elseif option == OID_LegendaryPowerBonusEnabled
+    ;     if CPP_LegendaryPowerBonusEnabled.GetValue() == 1
+    ;         CPP_LegendaryPowerBonusEnabled.SetValue(0)
+    ;     else
+    ;         CPP_LegendaryPowerBonusEnabled.SetValue(1)
+    ;     endif
+    ;     SetToggleOptionValue(option, CPP_LegendaryPowerBonusEnabled.GetValue())
 
     elseif option == OID_CheaterToggle
         debugCheaterToggle = !debugCheaterToggle
@@ -440,7 +497,7 @@ Event OnOptionSliderOpen(int option)
         SetSliderDialogStartValue(CPP_PerkPointsMultiplier.GetValue())
         SetSliderDialogDefaultValue(1.0)
         SetSliderDialogRange(1.0, 100.0)
-        SetSliderDialogInterval(1)
+        SetSliderDialogInterval(1.0)
 
     elseif (option == OID_SpellSouls)
         SetSliderDialogStartValue(CPP_Spell_SoulToPoint_SoulsNeeded.GetValue())
@@ -465,6 +522,36 @@ Event OnOptionSliderOpen(int option)
         SetSliderDialogDefaultValue(5.0)
         SetSliderDialogRange(1.0, 100.0)
         SetSliderDialogInterval(1.0)
+    
+    elseif (option == OID_CustomSkills_StartingLevel)
+        SetSliderDialogStartValue(CPP_CustomSkills_StartingLevel.GetValue())
+        SetSliderDialogDefaultValue(50.0)
+        SetSliderDialogRange(1.0, 100.0)
+        SetSliderDialogInterval(1.0)
+
+    elseif (option == OID_CustomSkills_LevelInterval)
+        SetSliderDialogStartValue(CPP_CustomSkills_LevelInterval.GetValue())
+        SetSliderDialogDefaultValue(50.0)
+        SetSliderDialogRange(1.0, 100.0)
+        SetSliderDialogInterval(1.0)
+
+    elseif (option == OID_CustomSkills_MaxLevel)
+        SetSliderDialogStartValue(CPP_CustomSkills_MaxLevel.GetValue())
+        SetSliderDialogDefaultValue(100.0)
+        SetSliderDialogRange(1.0, 1000.0)
+        SetSliderDialogInterval(5.0)
+
+    elseif (option == OID_CustomSkills_PerkPointsMultiplier)
+        SetSliderDialogStartValue(CPP_CustomSkills_PerkPointsMultiplier.GetValue())
+        SetSliderDialogDefaultValue(1.0)
+        SetSliderDialogRange(1.0, 100.0)
+        SetSliderDialogInterval(1.0)
+
+    ; elseif (option == OID_LegendaryPowerBonusValue)
+    ;     SetSliderDialogStartValue(CPP_LegendaryPowerBonusValue.GetValue())
+    ;     SetSliderDialogDefaultValue(10.0)
+    ;     SetSliderDialogRange(1.0, 200.0)
+    ;     SetSliderDialogInterval(1.0)
 
     elseif option == OID_CheaterPerkPoints
         SetSliderDialogStartValue(debugCheaterPerkPoints)
@@ -494,24 +581,44 @@ Event OnOptionSliderAccept(int option, float value)
 
     elseif (option == OID_PointsMultiplier)
         CPP_PerkPointsMultiplier.SetValue(value)
-        SetSliderOptionValue(OID_PointsMultiplier, value, "{0}")
+        SetSliderOptionValue(option, value, "{0}")
         UpdateSettingsPreview()
 
     elseif (option == OID_SpellSouls)
         CPP_Spell_SoulToPoint_SoulsNeeded.SetValue(value)
-        SetSliderOptionValue(OID_SpellSouls, value, "{0}")
+        SetSliderOptionValue(option, value, "{0}")
 
     elseif (option == OID_SpellPoints)
         CPP_Spell_SoulToPoint_Points.SetValue(value)
-        SetSliderOptionValue(OID_SpellPoints, value, "{0}")
+        SetSliderOptionValue(option, value, "{0}")
 
     elseif (option == OID_DragonSouls)
         CPP_DragonDeaths_SoulsNeeded.SetValue(value)
-        SetSliderOptionValue(OID_DragonSouls, value, "{0}")
+        SetSliderOptionValue(option, value, "{0}")
 
     elseif (option == OID_DragonPoints)
         CPP_DragonDeaths_Points.SetValue(value)
-        SetSliderOptionValue(OID_DragonPoints, value, "{0}")
+        SetSliderOptionValue(option, value, "{0}")
+
+    elseif (option == OID_CustomSkills_StartingLevel)
+        CPP_CustomSkills_StartingLevel.SetValue(value)
+        SetSliderOptionValue(option, value, "{0}")
+
+    elseif (option == OID_CustomSkills_LevelInterval)
+        CPP_CustomSkills_LevelInterval.SetValue(value)
+        SetSliderOptionValue(option, value, "{0}")
+
+    elseif (option == OID_CustomSkills_MaxLevel)
+        CPP_CustomSkills_MaxLevel.SetValue(value)
+        SetSliderOptionValue(option, value, "{0}")
+
+    elseif (option == OID_CustomSkills_PerkPointsMultiplier)
+        CPP_CustomSkills_PerkPointsMultiplier.SetValue(value)
+        SetSliderOptionValue(option, value, "{0}")
+    
+    ; elseif (option == OID_LegendaryPowerBonusValue)
+    ;     CPP_LegendaryPowerBonusValue.SetValue(value)
+    ;     SetSliderOptionValue(option, value, "{0}")
 
     elseif option == OID_CheaterPerkPoints
         debugCheaterPerkPoints = value
@@ -527,9 +634,8 @@ function UpdateSettingsPreview()
     SetTextOptionValue(OID_PerkPointsExcess, ExcessPointsCalculate())
 endfunction
 
-; Helper function to show perk level preview
 string Function GetPerkLevelsPreview()
-    if CPP_GlobalSkillMode_Enabled.GetValue()
+    if CPP_GlobalSkillMode_Enabled.GetValueInt()
         return CPP_StartingLevel.GetValueInt() + " ..."
     endif
     int start = CPP_StartingLevel.GetValueInt()
@@ -559,270 +665,262 @@ int Function GetPerkPointsPreview()
     int interval = CPP_LevelInterval.GetValueInt()
     int maxLevel = CPP_MaxSkillLevel.GetValueInt()
 
-    ; if CPP_GlobalSkillMode_Enabled.GetValue()
     int calculationBaseline = start - interval
     int perkPointsDeserved = (maxLevel - calculationBaseline) / interval
     perkPointsDeserved = perkPointsDeserved * CPP_PerkPointsMultiplier.GetValueInt()
-    return perkPointsDeserved
-
-
-    ; elseif CPP_PlayerLevelMode_Enabled.GetValue()
-    ;     int calculationBaseline = start - interval
-    ;     int perkPointsDeserved = (maxLevel - calculationBaseline) / interval
-    ;     perkPointsDeserved = perkPointsDeserved * CPP_PerkPointsMultiplier.GetValueInt()
     
-    ; else
-    ;     int calculationBaseline = start - interval
-    ;     int perkPointsDeserved = (maxLevel - calculationBaseline) / interval
-    ;     perkPointsDeserved = perkPointsDeserved * CPP_PerkPointsMultiplier.GetValueInt()
-    ;     return perkPointsDeserved
-; 
-    ; endif
+    return perkPointsDeserved
 EndFunction
 
-;elseIf option == PerksFromStartOption
-Function AddMissedPoints()
+Function AddMissingPoints()
 
     if CPP_GlobalSkillMode_Enabled.GetValue()
-        AddMissedPointsGlobal()
+        AddMissing_GlobalMode()
     elseif CPP_PlayerLevelMode_Enabled.GetValue()
-        AddMissedPointsPlayerLevel()
+        AddMissing_PlayerLevelMode()
     else 
-        AddMissedPointsNormal()
+        AddMissing_NormalMode()
     endif
     
 EndFunction
 
-Function AddMissedPointsGlobal()
-    Actor player = Game.GetPlayer()
+Function AddMissing_GlobalMode()
 
+    Actor playerRef = Game.GetPlayer()
+
+    int totalProgress = 0
+    int skillCount = CPP_SkillNames.Length
     int i = 0
-    int globalLevelCount = 0
-    int startingLevel = CPP_StartingLevel.GetValueInt()
 
-    while i < CPP_SkillNames.Length
-        int currentLevel = Player.GetBaseActorValue(CPP_SkillNames[i]) as int
-        if (CPP_SkillsDisabled[i].GetValue() == 0 && currentLevel >= startingLevel)
-            globalLevelCount +=  currentLevel - startingLevel + 1 ; globalLevel += skillLevel
-        endIf
+    while i < skillCount
+
+        if CPP_SkillsDisabled[i].GetValueInt() == 0
+
+            int skillLevel = playerRef.GetBaseActorValue(CPP_SkillNames[i]) as int
+            int lastLevel  = CPP_LastSkillLevel[i].GetValueInt()
+
+            int gained = skillLevel - lastLevel
+            if gained < 0
+                gained = 0
+            endif
+
+            totalProgress += gained
+        endif
+
         i += 1
     endwhile
 
-    int perkPointsDeserved = globalLevelCount / CPP_LevelInterval.GetValueInt()
-    perkPointsDeserved = perkPointsDeserved * CPP_PerkPointsMultiplier.GetValueInt()
-    ; ile gracz powinien miec ogolnie perk pointow
-    totalPointsToAdd = perkPointsDeserved - CPP_GlobalSkillMode_PerkPointsEarned.GetValueInt()
-    ; ile wiecej powinno sie dodac
+    int levelInterval = CPP_LevelInterval.GetValueInt()
+    int multiplier    = CPP_PerkPointsMultiplier.GetValueInt()
 
-    if totalPointsToAdd > 1
-        Game.AddPerkPoints(totalPointsToAdd)
-        CPP_GlobalSkillMode_PerkPointsEarned.SetValue(perkPointsDeserved)
-        Debug.MessageBox("Added " + totalPointsToAdd + " perk points based on current skill levels.")
-    
-    elseif totalPointsToAdd == 1
-        Game.AddPerkPoints(totalPointsToAdd)
-        CPP_GlobalSkillMode_PerkPointsEarned.SetValue(perkPointsDeserved)
-        Debug.MessageBox("Added a perk point based on current skill levels.")
+    int totalDeserved = (totalProgress / levelInterval) * multiplier
+    int given         = CPP_GlobalSkillMode_PerkPointsEarned.GetValueInt()
+    totalMissing      = totalDeserved - given
 
-    elseif totalPointsToAdd == 0
-        Debug.MessageBox("No perk points added.")
-
-    else
-        int excessPoints = perkPointsDeserved - CPP_GlobalSkillMode_PerkPointsEarned.GetValueInt();
-        Debug.MessageBox("No perk points added, you still have " + excessPoints + " excess points.")
-
+    if totalMissing > 0
+        CPP_GlobalSkillMode_PerkPointsEarned.SetValueInt(totalDeserved)
     endif
 
-    ; Debug.MessageBox("deserved = " + perkPointsDeserved + " totaltoadd = " + totalPointsToAdd + " globallevelcount = " + globalLevelCount + "earned = " + CPP_GlobalSkillMode_PerkPointsEarned.GetValue())
+    GiveMissingPerkPointsWithMessage(totalMissing, totalDeserved)
+
 EndFunction
 
-Function AddMissedPointsPlayerLevel()
-    int playerLevel = Game.GetPlayer().GetLevel()
+
+Function AddMissing_PlayerLevelMode()
+
+    Actor playerRef = Game.GetPlayer()
+
+    int playerLevel   = playerRef.GetLevel()
     int startingLevel = CPP_StartingLevel.GetValueInt()
     int levelInterval = CPP_LevelInterval.GetValueInt()
+    int multiplier    = CPP_PerkPointsMultiplier.GetValueInt()
 
-    savedPerkPointsEarnedPlayer = CPP_PlayerLevelMode_PerkPointsEarned.GetValueInt()
-
-    if playerLevel >= startingLevel
-
-        int calculationBaseline = startingLevel - levelInterval
-        int pointsDeserved = (playerLevel - calculationBaseline) / levelInterval
-        pointsDeserved = pointsDeserved * CPP_PerkPointsMultiplier.GetValueInt()
-        int pointsEarned = CPP_PlayerLevelMode_PerkPointsEarned.GetValueInt()
-        savedPerkPointsEarnedGlobal = pointsEarned
-        ; Debug.MessageBox("deserved = " + pointsDeserved + "earned = " + pointsEarned + "calcbaseline = " + calculationBaseline + "playerlevel" + playerLevel)
-
-        if pointsEarned < pointsDeserved
-            totalPointsToAdd = pointsDeserved - pointsEarned
-
-            CPP_PlayerLevelMode_PerkPointsEarned.SetValue(pointsDeserved)
-
-            Game.AddPerkPoints(totalPointsToAdd)
-
-            if totalPointsToAdd > 1
-                Debug.MessageBox("Added " + totalPointsToAdd + " perk points based on current skill levels.")
-
-            elseif totalPointsToAdd == 1
-                Debug.MessageBox("Added a perk point based on current skill levels.")
-
-            elseif totalPointsToAdd == 0
-                Debug.MessageBox("No perk points added.")
-
-            else
-                int excessPoints = pointsDeserved - totalPointsToAdd
-                Debug.MessageBox("No perk points added. You still have " + excessPoints + " excess perk point(s).")
-            endIf
-
-        endif
+    if playerLevel < startingLevel
+        GiveMissingPerkPointsWithMessage(0, 0)
+        return
     endif
+
+    int baseline = startingLevel - levelInterval
+    int pointsDeserved = ((playerLevel - baseline) / levelInterval) * multiplier
+    int pointsEarned   = CPP_PlayerLevelMode_PerkPointsEarned.GetValueInt()
+
+    totalMissing = pointsDeserved - pointsEarned
+
+    if totalMissing > 0
+        CPP_PlayerLevelMode_PerkPointsEarned.SetValueInt(pointsDeserved)
+    endif
+
+    GiveMissingPerkPointsWithMessage(totalMissing, pointsDeserved)
+
 EndFunction
 
-Function AddMissedPointsNormal()
-    Actor player = Game.GetPlayer()
 
-    int calculationBaseline = CPP_StartingLevel.GetValueInt() - CPP_LevelInterval.GetValueInt()
-    int totalPerkPointsDeserved = 0
-	int i = 0
+Function AddMissing_NormalMode()
 
-    while i < CPP_SkillNames.Length
-        savedPerkPointsEarnedNormal = new int[18]
-        savedPerkPointsEarnedNormal[i] = CPP_PerkPointsEarned[i].GetValueInt()
+    Actor playerRef = Game.GetPlayer()
+
+    int startingLevel = CPP_StartingLevel.GetValueInt()
+    int levelInterval = CPP_LevelInterval.GetValueInt()
+    int maxLevel      = CPP_MaxSkillLevel.GetValueInt()
+    int multiplier    = CPP_PerkPointsMultiplier.GetValueInt()
+
+    int baseline = startingLevel - levelInterval
+    int totalDeserved = 0
+
+    int skillCount = CPP_SkillNames.Length
+    int i = 0
+
+    while i < skillCount
+
+        if CPP_SkillsDisabled[i].GetValueInt() == 0
+
+            int skillLevel = playerRef.GetBaseActorValue(CPP_SkillNames[i]) as int
+            int deserved = ((skillLevel - baseline) / levelInterval) * multiplier
+            int current  = CPP_PerkPointsEarned[i].GetValueInt()
+
+            if deserved > 0
+                totalDeserved += deserved
+            endif
+
+            if deserved > current && deserved > 0
+                totalMissing += (deserved - current)
+
+                if skillLevel == maxLevel
+                    CPP_PerkPointsEarned[i].SetValueInt(0)
+                else
+                    CPP_PerkPointsEarned[i].SetValueInt(deserved)
+                endif
+            endif
+
+        endif
+
         i += 1
     endwhile
 
-    i = 0
+    GiveMissingPerkPointsWithMessage(totalMissing, totalDeserved)
 
-	while i < CPP_SkillNames.Length
-        if CPP_SkillsDisabled[i].GetValue() == 0
-            int skillLevel = Player.GetBaseActorValue(CPP_SkillNames[i]) as int
-            int perkPointsDeserved = (skillLevel - calculationBaseline) / CPP_LevelInterval.GetValueInt()
-            perkPointsDeserved = perkPointsDeserved * CPP_PerkPointsMultiplier.GetValueInt()
+EndFunction
 
-            totalPerkPointsDeserved += perkPointsDeserved
 
-            if perkPointsDeserved > 0
-                CPP_PerkPointsEarned[i].SetValue(perkPointsDeserved)
-                totalPointsToAdd += perkPointsDeserved
 
-            else
-                CPP_PerkPointsEarned[i].SetValue(0)
+Function GiveMissingPerkPointsWithMessage(int pointsToAdd, int totalPerkPointsDeserved)
 
-            endIf
-        endIf
-		i += 1
-	endwhile
+    if pointsToAdd > 1
+        Game.AddPerkPoints(pointsToAdd)
+        Debug.MessageBox("Added " + pointsToAdd + " perk points based on current skill levels.")
 
-    if totalPointsToAdd > 1
-        Game.AddPerkPoints(totalPointsToAdd)
-        Debug.MessageBox("Added " + totalPointsToAdd + " perk points based on current skill levels.")
-
-    elseif totalPointsToAdd == 1
-        Game.AddPerkPoints(totalPointsToAdd)
+    elseif pointsToAdd == 1
+        Game.AddPerkPoints(1)
         Debug.MessageBox("Added a perk point based on current skill levels.")
 
-    elseif totalPointsToAdd == 0
+    elseif pointsToAdd == 0
         Debug.MessageBox("No perk points added.")
 
     else
-        int excessPoints = totalPerkPointsDeserved - totalPointsToAdd
+        int excessPoints = totalPerkPointsDeserved - pointsToAdd
         Debug.MessageBox("No perk points added. You still have " + excessPoints + " excess perk point(s).")
-	endIf
+    endif
+
 EndFunction
+
 
 
 Function UndoAddedMissedPoints()
-    int totalPointsToRemove = 0 - totalPointsToAdd
 
-    if totalPointsToAdd > 1
-        Game.ModPerkPoints(totalPointsToRemove)
-        Debug.MessageBox("Removed " + totalPointsToAdd + " perk points.")
+    if totalMissing <= 0
+        Debug.MessageBox("No perk points were added, so nothing was removed.")
+        return
+    endif
 
-    elseif totalPointsToAdd == 1
-        Game.ModPerkPoints(totalPointsToRemove)
+    Game.ModPerkPoints(-totalMissing)
+
+    if totalMissing > 1
+        Debug.MessageBox("Removed " + totalMissing + " perk points.")
+    else
         Debug.MessageBox("Removed a perk point.")
+    endif
+
+    ; Restore saved values
+    if CPP_PlayerLevelMode_Enabled.GetValueInt() == 1
+        CPP_PlayerLevelMode_PerkPointsEarned.SetValueInt(savedPerkPointsEarnedPlayer)
+
+    elseif CPP_GlobalSkillMode_Enabled.GetValueInt() == 1
+        CPP_GlobalSkillMode_PerkPointsEarned.SetValueInt(savedPerkPointsEarnedGlobal)
 
     else
-        Debug.MessageBox("No perk points were added, so nothing was removed.")
-
-    endIf
-
-    totalPointsToAdd = 0
-
-    if CPP_GlobalSkillMode_Enabled.GetValue()
-        CPP_GlobalSkillMode_PerkPointsEarned.SetValue(savedPerkPointsEarnedGlobal)
-    elseif CPP_PlayerLevelMode_Enabled.GetValue()
-        CPP_PlayerLevelMode_PerkPointsEarned.SetValue(savedPerkPointsEarnedPlayer)
-    else ; normal mode
         int i = 0
         while i < CPP_SkillNames.Length
-            CPP_PerkPointsEarned[i].SetValue(savedPerkPointsEarnedNormal[i])
+            CPP_PerkPointsEarned[i].SetValueInt(savedPerkPointsEarnedNormal[i])
             i += 1
         endwhile
     endif
 
+    totalMissing = 0
+
 EndFunction
 
+
 string Function ExcessPointsCalculate()
+
     Actor Player = Game.GetPlayer()
     int startingLevel = CPP_StartingLevel.GetValueInt()
     int levelInterval = CPP_LevelInterval.GetValueInt()
     int calculationBaseline = startingLevel - levelInterval
+    int multiplier = CPP_PerkPointsMultiplier.GetValueInt()
+
     int excessPoints = 0
     int i = 0
 
-    if CPP_GlobalSkillMode_Enabled.GetValue()
-        int effectiveSkillLevelSum = 0
+    if CPP_GlobalSkillMode_Enabled.GetValueInt() == 1
 
-        while i < CPP_SkillNames.Length
-            int skillLevel = Player.GetBaseActorValue(CPP_SkillNames[i]) as int
-            if CPP_SkillsDisabled[i].GetValue() == 0 && skillLevel >= startingLevel
-                effectiveSkillLevelSum += skillLevel - startingLevel + 1
-            endif
-            i += 1
-        endWhile
-
-        int perkPointsDeserved = effectiveSkillLevelSum / levelInterval
-        perkPointsDeserved = perkPointsDeserved * CPP_PerkPointsMultiplier.GetValueInt()
-        int perkPointsEarned = CPP_GlobalSkillMode_PerkPointsEarned.GetValueInt()
+        int perkPointsDeserved = (CPP_GlobalSkillMode_LevelProgress.GetValueInt() / levelInterval) * multiplier
+        int perkPointsEarned   = CPP_GlobalSkillMode_PerkPointsEarned.GetValueInt()
 
         if perkPointsDeserved < perkPointsEarned
             excessPoints = perkPointsEarned - perkPointsDeserved
         endif
 
 
-    elseif CPP_PlayerLevelMode_Enabled.GetValue()
-        int playerLevel = Player.GetLevel()
-        int perkPointsEarned = CPP_PlayerLevelMode_PerkPointsEarned.GetValueInt()
-        int perkPointsDeserved = (playerLevel - calculationBaseline) / levelInterval
-        perkPointsDeserved = perkPointsDeserved * CPP_PerkPointsMultiplier.GetValueInt()
+    elseif CPP_PlayerLevelMode_Enabled.GetValueInt() == 1
 
+        int playerLevel = Player.GetLevel()
         if playerLevel < startingLevel
             return 0
-        elseif perkPointsDeserved < perkPointsEarned
-            excessPoints =  perkPointsEarned - perkPointsDeserved
+        endif
+
+        int perkPointsEarned = CPP_PlayerLevelMode_PerkPointsEarned.GetValueInt()
+        int perkPointsDeserved = ((playerLevel - calculationBaseline) / levelInterval) * multiplier
+
+        if perkPointsDeserved < perkPointsEarned
+            excessPoints = perkPointsEarned - perkPointsDeserved
         endif
 
 
-    else
+    else ; NORMAL MODE
+
         while i < CPP_SkillNames.Length
-            int skillLevel = Player.GetBaseActorValue(CPP_SkillNames[i]) as int
 
-            if CPP_SkillsDisabled[i].GetValue() == 0 && skillLevel >= startingLevel
-                int perkPointsDeserved = (skillLevel - calculationBaseline) / levelInterval
-                int perkPointsEarned = CPP_PerkPointsEarned[i].GetValueInt()
+            if CPP_SkillsDisabled[i].GetValueInt() == 0
+                int skillLevel = Player.GetBaseActorValue(CPP_SkillNames[i]) as int
 
-                perkPointsDeserved = perkPointsDeserved * CPP_PerkPointsMultiplier.GetValueInt()
+                if skillLevel >= startingLevel
+                    int perkPointsDeserved = ((skillLevel - calculationBaseline) / levelInterval) * multiplier
+                    int perkPointsEarned   = CPP_PerkPointsEarned[i].GetValueInt()
 
-                if perkPointsDeserved < perkPointsEarned
-                    excessPoints += perkPointsEarned - perkPointsDeserved
+                    if perkPointsDeserved < perkPointsEarned
+                        excessPoints += perkPointsEarned - perkPointsDeserved
+                    endif
                 endif
             endif
+
             i += 1
-        endWhile
+        endwhile
+
     endif
-    
+
     return excessPoints
 EndFunction
+
 
 Function DetectLegendarySkills()
     if CPP_GlobalSkillMode_Enabled.GetValue() || CPP_PlayerLevelMode_Enabled.GetValue()
@@ -836,13 +934,14 @@ Function DetectLegendarySkills()
 
     int i = 0
     while i < CPP_SkillNames.Length
-        if CPP_SkillsDisabled[i].GetValue() == 0
+        ; if CPP_SkillsDisabled[i].GetValue() == 0
             int skillLevel = Player.GetBaseActorValue(CPP_SkillNames[i]) as int
             if skillLevel == maxLevel
-                CPP_PerkPointsEarned[i].SetValue(0)
+                CPP_PerkPointsEarned[i].SetValueInt(0)
+                CPP_SkillLegendaryCount[i].SetValueInt(CPP_SkillLegendaryCount[i].GetValueInt() + 1)
                 legendaryCount += 1
             endif
-        endif
+        ; endif
         i += 1
     endWhile
     if legendaryCount > 1
@@ -854,6 +953,33 @@ Function DetectLegendarySkills()
     endif
     
 EndFunction
+
+    ; elseif page == "Skill Overview"
+    ;     SetCursorFillMode(LEFT_TO_RIGHT)
+
+    ;     AddHeaderOption("Perk Points From Skills")
+    ;     AddTextOption("Alteration", CPP_PerkPointsEarned[0].GetValueInt())
+    ;     AddEmptyOption()
+
+    ;     AddTextOption("Conjuration", CPP_PerkPointsEarned[1].GetValueInt())
+    ;     AddTextOption("Destruction", CPP_PerkPointsEarned[2].GetValueInt())
+    ;     AddTextOption("Illusion", CPP_PerkPointsEarned[3].GetValueInt())
+    ;     AddTextOption("Restoration", CPP_PerkPointsEarned[4].GetValueInt())
+    ;     AddTextOption("Enchanting", CPP_PerkPointsEarned[5].GetValueInt())
+    ;     AddTextOption("One-Handed", CPP_PerkPointsEarned[6].GetValueInt())
+    ;     AddTextOption("Two-Handed", CPP_PerkPointsEarned[7].GetValueInt())
+    ;     AddTextOption("Marksman", CPP_PerkPointsEarned[8].GetValueInt())
+    ;     AddTextOption("Block", CPP_PerkPointsEarned[9].GetValueInt())
+    ;     AddTextOption("Light Armor", CPP_PerkPointsEarned[10].GetValueInt())
+    ;     AddTextOption("Heavy Armor", CPP_PerkPointsEarned[11].GetValueInt())
+    ;     AddTextOption("Smithing", CPP_PerkPointsEarned[12].GetValueInt())
+    ;     AddTextOption("Alchemy", CPP_PerkPointsEarned[13].GetValueInt())
+    ;     AddTextOption("Sneak", CPP_PerkPointsEarned[14].GetValueInt())
+    ;     AddTextOption("Lockpicking", CPP_PerkPointsEarned[15].GetValueInt())
+    ;     AddTextOption("Pickpocket", CPP_PerkPointsEarned[16].GetValueInt())
+    ;     AddTextOption("Speechcraft", CPP_PerkPointsEarned[17].GetValueInt())
+
+    
 
     ; //// undo missed points
 	; Actor Player = Game.GetPlayer()
