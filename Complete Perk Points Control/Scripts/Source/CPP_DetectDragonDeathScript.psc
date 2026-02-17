@@ -57,5 +57,4 @@ Event OnEffectStart(Actor akTarget, Actor akCaster)
         Debug.Notification("You've slain " + dragonText + " and earned " + pointText + "!")
     endif
 
-
 EndEvent

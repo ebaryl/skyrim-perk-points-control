@@ -24,6 +24,7 @@ GlobalVariable Property CPP_CustomSkills_StartingLevel auto
 GlobalVariable Property CPP_CustomSkills_LevelInterval auto
 GlobalVariable Property CPP_CustomSkills_MaxLevel auto
 GlobalVariable Property CPP_CustomSkills_PerkPointsMultiplier auto
+GlobalVariable Property CPP_CustomSkills_HasSelectedProgression auto
 GlobalVariable Property CPP_Spell_SoulToPoint_SoulsNeeded auto
 GlobalVariable Property CPP_Spell_SoulToPoint_Points auto
 GlobalVariable Property CPP_DragonDeaths_Enabled auto
@@ -55,7 +56,7 @@ int OID_LevelInterval
 int OID_MaxSkillLevel
 int OID_ShowNotifications
 int OID_CustomSkills_Enabled
-int OID_CustomSkills_GlobalProgressionMode
+int OID_CustomSkills_ProgressionMode
 int OID_CustomSkills_StartingLevel
 int OID_CustomSkills_LevelInterval
 int OID_CustomSkills_MaxLevel
@@ -87,7 +88,7 @@ Event OnConfigInit()
     ModName = "Complete Perk Points Control"
     Pages = new string[4]
     Pages[0] = "General"
-    Pages[1] = "Skill Toggles"
+    Pages[1] = "Excluded Skills"
     Pages[2] = "Custom Skills"
     ; Pages[2] = "Legendary Bonuses"
     Pages[3] = "Debug"
@@ -106,52 +107,51 @@ Event OnPageReset(string page)
         
         AddHeaderOption("General Settings")
         OID_ModEnabled = AddToggleOption("Enable Mod", CPP_ModEnabled.GetValue())
-        OID_LegendarySkillsEnabled = AddToggleOption("Enable Legendary Perk Points", CPP_LegendarySkillsEnabled.GetValue())
-        OID_ShowNotifications = AddToggleOption("Show Notifications", CPP_ShowNotifications.GetValue())
+        OID_LegendarySkillsEnabled = AddToggleOption("Legendary Skill Rewards", CPP_LegendarySkillsEnabled.GetValue())
+        OID_ShowNotifications = AddToggleOption("Notifications", CPP_ShowNotifications.GetValue())
         AddEmptyOption()
 
-        AddHeaderOption("Progression Mode")
+        AddHeaderOption("Progression Type")
         OID_ProgressionMode = AddMenuOption("", GetProgressionMode(), CPP_Menu_HasSelectedProgression.GetValueInt())
         AddEmptyOption()
         
-        AddHeaderOption("Points Award Settings")
+        AddHeaderOption("Rewards")
         OID_StartingLevel = AddSliderOption("Starting Level", CPP_StartingLevel.GetValue(), "{0}")
         OID_LevelInterval = AddSliderOption("Level Interval", CPP_LevelInterval.GetValue(), "{0}")
         OID_MaxSkillLevel = AddSliderOption("Max Skill Level", CPP_MaxSkillLevel.GetValue(), "{0}")
-        OID_PointsMultiplier = AddSliderOption("Perk Points Multiplier", CPP_PerkPointsMultiplier.GetValueInt(), "{0}")
+        OID_PointsMultiplier = AddSliderOption("Reward Multiplier", CPP_PerkPointsMultiplier.GetValueInt(), "{0}")
         AddEmptyOption()
 
-        AddHeaderOption("Spell Settings")
-        OID_SpellSouls = AddSliderOption("Dragon Souls Required", CPP_Spell_SoulToPoint_SoulsNeeded.GetValue(), "{0}")
-        OID_SpellPoints = AddSliderOption("Perk Points Gained", CPP_Spell_SoulToPoint_Points.GetValue(), "{0}")
+        AddHeaderOption("Soul Conversion")
+        OID_SpellSouls = AddSliderOption("Souls Required", CPP_Spell_SoulToPoint_SoulsNeeded.GetValue(), "{0}")
+        OID_SpellPoints = AddSliderOption("Points per Reward", CPP_Spell_SoulToPoint_Points.GetValue(), "{0}")
         AddEmptyOption()
 
-        AddHeaderOption("Dragon Soul Absorbtion Points")
-        OID_DragonEnabled = AddToggleOption("Enable Absorbtion Points", CPP_DragonDeaths_Enabled.GetValue())
-        OID_DragonSouls = AddSliderOption("Soul Absorbtions Required", CPP_DragonDeaths_SoulsNeeded.GetValue(), "{0}")
-        OID_DragonPoints = AddSliderOption("Perk Points Gained", CPP_DragonDeaths_Points.GetValue(), "{0}")
+        AddHeaderOption("Dragon Soul Rewards")
+        OID_DragonEnabled = AddToggleOption("Enable Soul Rewards", CPP_DragonDeaths_Enabled.GetValue())
+        OID_DragonSouls = AddSliderOption("Souls Required", CPP_DragonDeaths_SoulsNeeded.GetValue(), "{0}")
+        OID_DragonPoints = AddSliderOption("Points per Reward", CPP_DragonDeaths_Points.GetValue(), "{0}")
         AddEmptyOption()
 
         SetCursorPosition(1) ; Move to right column
         
-        AddHeaderOption("Initial Points Setup")
-        OID_AddMissingPoints = AddTextOption("Add Missing Points", "Click to Add")
-        OID_UndoAddedMissedPoints = AddTextOption("Undo Points", "Click to Undo")
+        AddHeaderOption("Recalculation")
+        OID_AddMissingPoints = AddTextOption("Recalculate Rewards", "APPLY")
+        OID_UndoAddedMissedPoints = AddTextOption("Revert Changes", "REVERT")
         AddEmptyOption()
         AddEmptyOption()
         
-        AddHeaderOption("Current Settings Preview")
-        OID_PerkPointsLevelsPreview = AddTextOption("Points Awards At:", GetPerkLevelsPreview())
-        OID_PerkPointsPreview = AddTextOption("Perk Points Per Skill:", GetPerkPointsPreview())
-        OID_PerkPointsExcess = AddTextOption("Excess Perk Points:", ExcessPointsCalculate())
+        AddHeaderOption("Progression Preview")
+        OID_PerkPointsLevelsPreview = AddTextOption("Reward Levels:", GetPerkLevelsPreview())
+        OID_PerkPointsPreview = AddTextOption("Points per Skill:", GetPerkPointsPreview())
+        OID_PerkPointsExcess = AddTextOption("Deferred Points:", ExcessPointsCalculate())
 
-    elseif page == "Skill Toggles"
+    elseif page == "Excluded Skills"
         SetCursorFillMode(TOP_TO_BOTTOM)
         
         OID_SkillsDisabled = new int[18]
 
-        AddEmptyOption()
-        AddHeaderOption("Select To Disable")
+        AddHeaderOption("Skills to Exclude")
         AddEmptyOption()
 
         int i = 0
@@ -161,7 +161,6 @@ Event OnPageReset(string page)
         EndWhile
 
         SetCursorPosition(1)
-        AddEmptyOption()
         while i < 18
             OID_SkillsDisabled[i] = AddToggleOption(CPP_SkillNames[i], CPP_SkillsDisabled[i].GetValue())
             i += 1
@@ -173,22 +172,27 @@ Event OnPageReset(string page)
         
         SetCursorFillMode(TOP_TO_BOTTOM)
 
-        AddEmptyOption()
         if (pluginActive)
             AddHeaderOption("Custom Skills")
         else
             AddHeaderOption("SKSE plugin not loaded")
             flags = OPTION_FLAG_DISABLED
         endif
+        
+        OID_CustomSkills_Enabled = AddToggleOption("Enable Rewards", CPP_CustomSkills_Enabled.GetValueInt(), flags)
+
+        AddEmptyOption()
+        AddHeaderOption("Progression Type")
+        OID_CustomSkills_ProgressionMode = AddMenuOption("", GetCustomSkillsProgressionMode(), CPP_CustomSkills_HasSelectedProgression.GetValueInt())
         AddEmptyOption()
 
-        OID_CustomSkills_Enabled = AddToggleOption("Enable Custom Skill Points", CPP_CustomSkills_Enabled.GetValueInt(), flags)
-        OID_CustomSkills_GlobalProgressionMode = AddToggleOption("Cumulative Skill Progression", CPP_CustomSkills_GlobalProgressionMode.GetValueInt(), flags)
+        ;OID_CustomSkills_GlobalProgressionMode = AddToggleOption("Shared Progression Pool", CPP_CustomSkills_GlobalProgressionMode.GetValueInt(), flags)
         OID_CustomSkills_StartingLevel = AddSliderOption("Starting Level", CPP_CustomSkills_StartingLevel.GetValueInt(), "{0}", flags)
         OID_CustomSkills_LevelInterval = AddSliderOption("Level Interval", CPP_CustomSkills_LevelInterval.GetValueInt(), "{0}", flags)
         OID_CustomSkills_MaxLevel = AddSliderOption("Max Skill Level", CPP_CustomSkills_MaxLevel.GetValueInt(), "{0}", flags)
-        OID_CustomSkills_PerkPointsMultiplier = AddSliderOption("Perk Points Multiplier", CPP_CustomSkills_PerkPointsMultiplier.GetValueInt(), "{0}", flags)
+        OID_CustomSkills_PerkPointsMultiplier = AddSliderOption("Reward Multiplier", CPP_CustomSkills_PerkPointsMultiplier.GetValueInt(), "{0}", flags)
         
+
     ; elseif page == "Legendary Bonuses"
     ;     SetCursorFillMode(TOP_TO_BOTTOM)
 
@@ -216,76 +220,76 @@ Event OnPageReset(string page)
         SetCursorFillMode(TOP_TO_BOTTOM)
 
         AddHeaderOption("Legendary Skills")
-        OID_DetectLegendary = AddTextOption("Detect Legendary Skills", "Detect", CPP_Menu_HasDetectedLegendary.GetValueInt())
+        OID_DetectLegendary = AddTextOption("Sync Legendary Skills", "SYNC", CPP_Menu_HasDetectedLegendary.GetValueInt())
 
         AddEmptyOption()        
         AddHeaderOption("Cheats")
 
-        OID_CheaterToggle = AddToggleOption("Enable Cheats", debugCheaterToggle)
+        OID_CheaterToggle = AddToggleOption("Cheats Enabled", debugCheaterToggle)
 
         if debugCheaterToggle == true
-            OID_CheaterPerkPoints = AddSliderOption("Perk Points", debugCheaterPerkPoints, "{0}")
-            OID_CheaterAdd = AddTextOption("Add Points", "Click to Add")
-            OID_CheaterRemove = AddTextOption("Remove Points", "Click to Remove")
+            OID_CheaterPerkPoints = AddSliderOption("Points Amount", debugCheaterPerkPoints, "{0}")
+            OID_CheaterAdd = AddTextOption("Add Points", "ADD")
+            OID_CheaterRemove = AddTextOption("Remove Points", "REMOVE")
         endif
     endif
 EndEvent
 
 Event OnOptionHighlight(int option)
-    if (option == OID_ShowNotifications)
-        SetInfoText("Toggle notifications when perk points are awarded (e.g., from leveling up, skill progress, or dragon souls). Notifications are disabled for Player Level Progression and Custom Skills.")
-    
-    elseif option == OID_ProgressionMode
-        string aa = "PERMANENT CHOICE. "
-        string a = "Independent Skill Progression: Grants a perk point when any single skill increases by the set amount. "
-        string b = "Cumulative Skill Progression: Grants a perk point when the total combined skill level increases by the set amount. "
-        string c = "Player Level: Grants a perk point each time your character levels up by the set amount AFTER you select stats and close level-up menu."
-        SetInfoText(aa + a + b + c)
-
+    if option == OID_ModEnabled
+        SetInfoText("Enable or disable the Complete Perk Points system. When disabled, no points will be granted.")
     elseif option == OID_LegendarySkillsEnabled
         SetInfoText("Controls whether legendary skills can still grant perk points.")
+    elseif (option == OID_ShowNotifications)
+        SetInfoText("Show notifications when points are awarded (leveling, skill progress, or dragon souls). Disabled in Player Level and Custom Skills modes.")
+    elseif option == OID_ProgressionMode
+        string a = "PERMANENT CHOICE.\n"
+        string b = "Independent Skill Progression: Grants points when an individual skill increases by the configured interval.\n"
+        string c = "Cumulative Skill Progression: Grants points based on the combined progress of multiple skills.\n"
+        string d = "Player Level Progression: Grants points based on character level increases after confirming level-up."
+        SetInfoText(a + b + c + d)
     elseif (option == OID_StartingLevel)
-        SetInfoText("The player level or skill level at which you start receiving perk points. Includes this level.")
+        SetInfoText("Level at which rewards begin. This level is included.")
     elseif (option == OID_LevelInterval)
-        SetInfoText("Number of levels to gain before receiving another perk point. E.g., 5 means every 5 levels.")
+        SetInfoText("Number of levels required to gain another point.")
     elseif (option == OID_MaxSkillLevel)
-        SetInfoText("The skill level at which you stop receiving points. Should match your skill cap. (Default is 100 unless using a skill uncapper.)")
+        SetInfoText("Maximum skill level used for reward calculation. Default is 100 unless using an uncapper.")
     elseif (option == OID_PointsMultiplier)
-        SetInfoText("Multiplies the number of perk points granted at each interval. E.g., 2 gives double points.")
+        SetInfoText("Multiplies points granted at each interval.")
     elseif option == OID_SpellSouls
-        SetInfoText("Sets how many dragon souls are needed to gain perk points using the conversion spell.")
+        SetInfoText("Number of dragon souls required to gain points using the sacrifice spell.")
     elseif option == OID_SpellPoints
-        SetInfoText("Sets how many perk points are gained when the required number of dragon souls is consumed by the spell.")
+        SetInfoText("Points granted when the required number of souls is consumed.")
     elseif option == OID_DragonEnabled
-        SetInfoText("Enable or disable automatic perk point rewards based on dragon soul absorption.")
+        SetInfoText("Enable automatic point rewards based on dragon soul absorption.")
     elseif option == OID_DragonSouls
-        SetInfoText("Sets how many dragon souls must be absorbed to earn perk points passively. Souls are not consumed. Example: 30 = 1 point every 30 dragon souls.")
+        SetInfoText("Number of dragon souls that must be absorbed to trigger a reward. Souls are not consumed.")
     elseif option == OID_DragonPoints
-        SetInfoText("Sets how many perk points are awarded each time the required number of dragon souls is absorbed.")
+        SetInfoText("Points granted each time the absorption threshold is reached.")
     elseif option == OID_DetectLegendary
-        SetInfoText("For independent skill progression only. Detects maxed-out skills based on your max level setting.")
+        SetInfoText("Synchronizes skills at the maximum level with the progression system.")
     elseif option == OID_AddMissingPoints
-        SetInfoText("Adds any missed perk points due to changed settings (e.g., lowering starting level, reducing the level interval, or increasing the points multiplier).")
+        SetInfoText("Adds points that were missed due to recent setting changes.")
     elseif option == OID_UndoAddedMissedPoints
-        SetInfoText("Removes previously added points if you changed your mind afterward.")
+        SetInfoText("Reverts points added during the last recalculation.")
     elseif option == OID_PerkPointsLevelsPreview
-        SetInfoText("Shows a preview of the first few levels and when you'll receive perk points. Useful for planning.")
+        SetInfoText("Shows upcoming levels where points will be granted.")
     elseif option == OID_PerkPointsPreview
-        SetInfoText("Displays how many perk points you'll earn for a single skill if you level it to the maximum skill level.")
+        SetInfoText("Displays total points a single skill can generate at the maximum level.")
     elseif option == OID_PerkPointsExcess
-        SetInfoText("Shows how many perk points are temporarily withheld due to reduced settings (e.g., higher level interval or lower multiplier). These points will be balanced out over future levels.")
+        SetInfoText("Shows points currently deferred due to stricter settings. They will be balanced through future progression.")
     elseif option == OID_CustomSkills_Enabled
-        SetInfoText("Enables or disables the Custom Skills perk point progression system.")
-    elseif option == OID_CustomSkills_GlobalProgressionMode
-        SetInfoText("When enabled, perk point progression is shared globally across all custom skills instead of being tracked individually per skill.")
+        SetInfoText("Enable progression rewards for Custom Skills.")
+    elseif option == OID_CustomSkills_ProgressionMode
+        SetInfoText("PERMANENT CHOICE.\nIndependent: Each skill progresses separately.\nCumulative: Grants points based on the combined progress of multiple custom skills.")
     elseif option == OID_CustomSkills_StartingLevel
-        SetInfoText("The skill level at which a custom skill begins granting perk points. Includes this level.")
+        SetInfoText("Level at which a custom skill begins granting points. Includes this level.")
     elseif option == OID_CustomSkills_LevelInterval
-        SetInfoText("Number of skill levels required before another perk point is granted. Example: 5 = 1 point every 5 skill levels.")
+        SetInfoText("Number of skill levels required before another perk point is granted.")
     elseif option == OID_CustomSkills_MaxLevel
-        SetInfoText("The maximum skill level used for perk point calculation. Should match the custom skill cap.")
+        SetInfoText("Maximum skill level used for perk point calculation.")
     elseif option == OID_CustomSkills_PerkPointsMultiplier
-        SetInfoText("Multiplies the number of perk points awarded at each interval. Example: 2 grants double perk points.")
+        SetInfoText("Multiplies points granted at each interval.")
 
     endif
 EndEvent
@@ -298,7 +302,16 @@ Event OnOptionMenuOpen(int option)
         menuOptions = new string[3]
         menuOptions[0] = "Independent Skill Progression"
         menuOptions[1] = "Cumulative Skill Progression"
-        menuOptions[2] = "Player Level"
+        menuOptions[2] = "Player Level Progression"
+        SetMenuDialogOptions(menuOptions)
+    
+    elseif option == OID_CustomSkills_ProgressionMode
+            if CPP_CustomSkills_HasSelectedProgression.GetValue() == 1
+                return
+            endif
+        menuOptions = new string[2]
+        menuOptions[0] = "Independent Skill Progression"
+        menuOptions[1] = "Cumulative Skill Progression"
         SetMenuDialogOptions(menuOptions)
     endif
 EndEvent
@@ -326,10 +339,29 @@ Event OnOptionMenuAccept(int option, int index)
         elseif index == 2 ; player level progresion
                 CPP_GlobalSkillMode_Enabled.SetValue(0)
                 CPP_PlayerLevelMode_Enabled.SetValue(1)
-
         endif
 
         SetMenuOptionValue(OID_ProgressionMode, GetProgressionMode())
+        UpdateSettingsPreview()
+
+    elseif option == OID_CustomSkills_ProgressionMode
+        if CPP_CustomSkills_HasSelectedProgression.GetValue() == 1
+                return
+            endif
+
+        if index >= 0
+            CPP_CustomSkills_HasSelectedProgression.SetValue(1)
+            SetOptionFlags(OID_CustomSkills_ProgressionMode, OPTION_FLAG_DISABLED)
+        endif
+
+        if index == 0 ; Independent
+            CPP_CustomSkills_GlobalProgressionMode.SetValue(2)
+
+        elseif index == 1 ; Cumulative
+            CPP_CustomSkills_GlobalProgressionMode.SetValue(1)
+
+        endif
+        SetMenuOptionValue(OID_CustomSkills_ProgressionMode, GetCustomSkillsProgressionMode())
         UpdateSettingsPreview()
     endif
 EndEvent
@@ -353,7 +385,7 @@ EndFunction
 
 string Function GetProgressionMode()
     if CPP_PlayerLevelMode_Enabled.GetValue() == 1
-        return "Player Level"
+        return "Player Level Progression"
     elseif CPP_GlobalSkillMode_Enabled.GetValue() == 1
         return "Cumulative Skill Progression"
     else
@@ -361,7 +393,15 @@ string Function GetProgressionMode()
     endif
 EndFunction
 
-
+string Function GetCustomSkillsProgressionMode()
+    if CPP_CustomSkills_GlobalProgressionMode.GetValue() == 1
+        return "Cumulative Skill Progression"
+    elseif CPP_CustomSkills_GlobalProgressionMode.GetValue() == 0
+        return "Independent Skill Progression"
+    else
+        return "Independent Skill Progression"
+    endif
+EndFunction
 
 Event OnOptionSelect(int option)
     if option == OID_ModEnabled
@@ -410,7 +450,7 @@ Event OnOptionSelect(int option)
         endif
         SetToggleOptionValue(option, CPP_CustomSkills_Enabled.GetValue())
 
-    elseif option == OID_CustomSkills_GlobalProgressionMode
+    elseif option == OID_CustomSkills_ProgressionMode
         if CPP_CustomSkills_GlobalProgressionMode.GetValue() == 1
             CPP_CustomSkills_GlobalProgressionMode.SetValue(0)
         else
@@ -806,19 +846,19 @@ EndFunction
 Function GiveMissingPerkPointsWithMessage(int pointsToAdd, int totalPerkPointsDeserved)
 
     if pointsToAdd > 1
-        Game.AddPerkPoints(pointsToAdd)
-        Debug.MessageBox("Added " + pointsToAdd + " perk points based on current skill levels.")
+    Game.AddPerkPoints(pointsToAdd)
+    Debug.MessageBox("Added " + pointsToAdd + " points.")
 
     elseif pointsToAdd == 1
         Game.AddPerkPoints(1)
-        Debug.MessageBox("Added a perk point based on current skill levels.")
+        Debug.MessageBox("Added 1 point.")
 
     elseif pointsToAdd == 0
-        Debug.MessageBox("No perk points added.")
+        Debug.MessageBox("No points added.")
 
     else
         int excessPoints = totalPerkPointsDeserved - pointsToAdd
-        Debug.MessageBox("No perk points added. You still have " + excessPoints + " excess perk point(s).")
+        Debug.MessageBox("No points added. " + excessPoints + " points remain deferred.")
     endif
 
 EndFunction
@@ -828,16 +868,16 @@ EndFunction
 Function UndoAddedMissedPoints()
 
     if totalMissing <= 0
-        Debug.MessageBox("No perk points were added, so nothing was removed.")
+        Debug.MessageBox("No points to revert.")
         return
     endif
 
     Game.ModPerkPoints(-totalMissing)
 
     if totalMissing > 1
-        Debug.MessageBox("Removed " + totalMissing + " perk points.")
+        Debug.MessageBox("Reverted " + totalMissing + " points.")
     else
-        Debug.MessageBox("Removed a perk point.")
+        Debug.MessageBox("Reverted 1 point.")
     endif
 
     ; Restore saved values
@@ -924,7 +964,7 @@ EndFunction
 
 Function DetectLegendarySkills()
     if CPP_GlobalSkillMode_Enabled.GetValue() || CPP_PlayerLevelMode_Enabled.GetValue()
-        Debug.MessageBox("I can't do it in this progression mode.")
+        Debug.MessageBox("This function is not available in the current progression mode.")
         return
     endif
 
@@ -945,11 +985,11 @@ Function DetectLegendarySkills()
         i += 1
     endWhile
     if legendaryCount > 1
-        Debug.MessageBox("Detected " + legendaryCount + " legendary skills. Settings updated.")
+        Debug.MessageBox("Synchronized " + legendaryCount + " legendary skills.")
     elseif legendaryCount == 1
-        Debug.MessageBox("Detected a legendary skill. Settings updated.")
+        Debug.MessageBox("Synchronized 1 legendary skill.")
     elseif legendaryCount == 0 
-        Debug.MessageBox("Detected no legendary skills.")
+        Debug.MessageBox("No legendary skills required synchronization.")
     endif
     
 EndFunction

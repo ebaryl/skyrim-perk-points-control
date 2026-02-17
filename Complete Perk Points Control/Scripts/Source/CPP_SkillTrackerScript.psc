@@ -56,7 +56,8 @@ Event OnStoryIncreaseSkill(string asSkill)
     else
         HandleNormalSkillMode(skillIndex, skillLevel, startingLevel, levelInterval, maxLevel, multiplier)
     endif
-
+    
+    Stop()
 EndEvent
 
 Function HandleGlobalSkillMode(int skillIndex, int skillLevel, int maxLevel, int levelInterval, int multiplier)
